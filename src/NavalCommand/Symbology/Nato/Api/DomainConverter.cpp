@@ -23,11 +23,30 @@ namespace NavalCommand::Symbology::Nato::Api
 			std::uint8_t EntitySubtype{};
 			std::uint8_t Modifier1{};
 			std::optional<std::string> Name;
+			std::uint8_t Modifier2{};
 		};
 
 		ConversionError Error(ConversionErrorCode code, std::string message)
 		{
 			return {code, std::move(message)};
+		}
+
+		std::string TypeLabel(const Units::Api::TypeId& typeId, const std::optional<Units::Api::Type>& definition)
+		{
+			if (!definition || definition->Id != typeId)
+			{
+				return typeId.Value;
+			}
+			if (!definition->DisplayName)
+			{
+				return definition->AlternativeDisplayName.value_or(typeId.Value);
+			}
+			std::string label = *definition->DisplayName;
+			if (definition->AlternativeDisplayName)
+			{
+				label += " (" + *definition->AlternativeDisplayName + ")";
+			}
+			return label;
 		}
 
 		std::expected<ClassificationCode, ConversionError> ForSubCategory(SubCategory subCategory)
@@ -165,7 +184,22 @@ namespace NavalCommand::Symbology::Nato::Api
 
 		std::expected<ClassificationCode, ConversionError> ForType(const Units::Api::Type& type)
 		{
-			return ForSubCategory(type.UnitSubCategory);
+			auto classification = ForSubCategory(type.UnitSubCategory);
+			if (!classification)
+			{
+				return classification;
+			}
+			const bool airSuperiority = std::ranges::find(type.PlatformRoles, Classification::Api::Role::AirSuperiority) != type.PlatformRoles.end();
+			if (type.UnitSubCategory == SubCategory::FixedWingAircraft && airSuperiority)
+			{
+				classification->Modifier1 = 4; // Fighter.
+			}
+			if (type.UnitSubCategory == SubCategory::Missile && airSuperiority)
+			{
+				classification->Modifier1 = 1; // Air launch origin.
+				classification->Modifier2 = 1; // Air destination.
+			}
+			return classification;
 		}
 
 		void CopyPosition(const Units::Api::Kinematics& kinematics, Amplifiers& amplifiers)
@@ -259,6 +293,7 @@ namespace NavalCommand::Symbology::Nato::Api
 			fields.EntityType = classification.EntityType;
 			fields.EntitySubtype = classification.EntitySubtype;
 			fields.Modifier1 = classification.Modifier1;
+			fields.Modifier2 = classification.Modifier2;
 			auto sidc = Sidc::Create(std::move(fields));
 			if (!sidc)
 			{
@@ -279,7 +314,8 @@ namespace NavalCommand::Symbology::Nato::Api
 			{
 				if (!authorizedTypeDefinition || authorizedTypeDefinition->Id != *exactTypeId)
 				{
-					return ClassificationCode{SymbolSet::Unknown, 0, 0, 0, 0, "Exact type definition unavailable"};
+					// An exact identifier does not disclose the catalog record's subcategory.
+					return ClassificationCode{SymbolSet::Unknown};
 				}
 				return ForType(*authorizedTypeDefinition);
 			}
@@ -323,6 +359,7 @@ namespace NavalCommand::Symbology::Nato::Api
 		StandardIdentity identity,
 		Context context)
 	{
+		// A TypeId identifies the domain type; its matching catalog record supplies the subcategory.
 		ClassificationCode classification;
 		if (authorizedTypeDefinition)
 		{
@@ -337,17 +374,10 @@ namespace NavalCommand::Symbology::Nato::Api
 			}
 			classification = std::move(*mapped);
 		}
-		else
-		{
-			classification.Name = "Type definition unavailable";
-		}
 
 		Amplifiers amplifiers;
 		amplifiers.UniqueDesignation = unit.Name.empty() ? unit.Identity.Value : unit.Name;
-		if (authorizedTypeDefinition)
-		{
-			amplifiers.NameOrType = authorizedTypeDefinition->Id.Value;
-		}
+		amplifiers.NameOrType = TypeLabel(unit.Type, authorizedTypeDefinition);
 		CopyPosition(unit.Kinematics, amplifiers);
 		return MakeSymbol(
 			classification,
@@ -374,10 +404,7 @@ namespace NavalCommand::Symbology::Nato::Api
 		amplifiers.UniqueDesignation = observation.ObservationName.empty() ? observation.Identity.Value : observation.ObservationName;
 		if (const auto* exactTypeId = observation.Type.GetIf<Units::Api::TypeId>())
 		{
-			if (authorizedTypeDefinition && authorizedTypeDefinition->Id == *exactTypeId)
-			{
-				amplifiers.NameOrType = authorizedTypeDefinition->Id.Value;
-			}
+			amplifiers.NameOrType = TypeLabel(*exactTypeId, authorizedTypeDefinition);
 		}
 		else if (!classification->Name)
 		{

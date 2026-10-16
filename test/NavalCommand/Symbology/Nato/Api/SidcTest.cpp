@@ -100,7 +100,7 @@ namespace NavalCommand::Symbology::Nato::Api
 		}
 	}
 
-	TEST(SidcTest, CreateUsesSimulationAndTheStandardDestroyedStatusWhenRequested)
+	TEST(SidcTest, CreateUsesRealityAndTheStandardDestroyedStatusWhenRequested)
 	{
 		SidcFields fields;
 		fields.Identity = StandardIdentity::Friendly;
@@ -112,8 +112,8 @@ namespace NavalCommand::Symbology::Nato::Api
 		auto sidc = Sidc::Create(fields);
 
 		ASSERT_TRUE(sidc);
-		EXPECT_EQ(sidc->ToString(), "142335400011010000000000000000");
-		EXPECT_EQ(sidc->Fields().ContextValue, Context::Simulation);
+		EXPECT_EQ(sidc->ToString(), "140335400011010000000000000000");
+		EXPECT_EQ(sidc->Fields().ContextValue, Context::Reality);
 		EXPECT_EQ(sidc->Fields().Status, SymbolStatus::PresentDestroyed);
 	}
 
@@ -142,7 +142,7 @@ namespace NavalCommand::Symbology::Nato::Api
 		auto symbol = SymbolConverter::Create(identification, amplifiers);
 
 		ASSERT_TRUE(symbol);
-		EXPECT_EQ(symbol->Identification.Fields().ContextValue, Context::Simulation);
+		EXPECT_EQ(symbol->Identification.Fields().ContextValue, Context::Reality);
 		EXPECT_EQ(symbol->Identification.Fields().SymbolSetValue, SymbolSet::SeaSurface);
 		EXPECT_EQ(symbol->ExternalAmplifiers.UniqueDesignation, "CVN-72");
 		EXPECT_EQ(symbol->ExternalAmplifiers.CourseOverGroundRadians, 1.25);

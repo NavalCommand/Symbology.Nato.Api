@@ -8,5 +8,7 @@ namespace NavalCommand::Symbology::Nato::Api
 	{
 		ScreenRectangle Bounds;
 		bool WasDrawn{};
+		// Frame and internal icon only; excludes labels, uncertainty and movement.
+		ScreenRectangle SymbolBounds;
 	};
 }

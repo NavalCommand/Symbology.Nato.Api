@@ -35,12 +35,12 @@ namespace NavalCommand::Symbology::Nato::Api
 			const Units::Api::Instance& unit,
 			const std::optional<Units::Api::Type>& authorizedTypeDefinition,
 			StandardIdentity identity,
-			Context context = Context::Simulation);
+			Context context = Context::Reality);
 
 		static std::expected<Symbol, ConversionError> FromObservation(
 			const Observations::Api::Instance& observation,
 			const std::optional<Units::Api::Type>& authorizedTypeDefinition,
 			StandardIdentity identity,
-			Context context = Context::Simulation);
+			Context context = Context::Reality);
 	};
 }

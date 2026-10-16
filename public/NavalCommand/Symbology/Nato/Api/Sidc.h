@@ -16,7 +16,7 @@ namespace NavalCommand::Symbology::Nato::Api
 {
 	struct SidcFields
 	{
-		Context ContextValue{Context::Simulation};
+		Context ContextValue{Context::Reality};
 		StandardIdentity Identity{StandardIdentity::Unknown};
 		SymbolSet SymbolSetValue{SymbolSet::Unknown};
 		SymbolStatus Status{SymbolStatus::Present};

@@ -33,7 +33,7 @@ namespace NavalCommand::Symbology::Nato::Api
 		EXPECT_EQ(symbol->Identification.Fields().EntityType, 1);
 		EXPECT_EQ(symbol->Identification.Fields().Entity, 11);
 		EXPECT_EQ(symbol->Identification.Fields().Status, SymbolStatus::Present);
-		EXPECT_EQ(symbol->Identification.Fields().ContextValue, Context::Simulation);
+		EXPECT_EQ(symbol->Identification.Fields().ContextValue, Context::Reality);
 		EXPECT_EQ(symbol->ExternalAmplifiers.HeadingRadians, 0.25);
 		EXPECT_EQ(symbol->ExternalAmplifiers.CourseOverGroundRadians, 1.5);
 		EXPECT_EQ(symbol->ExternalAmplifiers.SpeedMetersPerSecond, 12.0);
@@ -94,6 +94,20 @@ namespace NavalCommand::Symbology::Nato::Api
 		EXPECT_EQ(symbol.error().Code, ConversionErrorCode::MismatchedTypeDefinition);
 	}
 
+	TEST(DomainConverterTest, PreservesKnownUnitTypeIdWhenItsClassificationRecordIsUnavailable)
+	{
+		Units::Api::Instance unit{};
+		unit.Identity.Value = "unit-perry";
+		unit.Name = "USS Perry";
+		unit.Type.Value = "vessels/usn_ffg_oliver_hazard_perry";
+
+		const auto symbol = DomainConverter::FromUnit(unit, std::nullopt, StandardIdentity::Friendly);
+
+		ASSERT_TRUE(symbol);
+		EXPECT_EQ(symbol->Identification.Fields().SymbolSetValue, SymbolSet::Unknown);
+		EXPECT_EQ(symbol->ExternalAmplifiers.NameOrType, "vessels/usn_ffg_oliver_hazard_perry");
+	}
+
 	TEST(DomainConverterTest, DoesNotPromoteGenericSubmarineObservationToSpecializedType)
 	{
 		Observations::Api::Instance observation{};
@@ -126,6 +140,7 @@ namespace NavalCommand::Symbology::Nato::Api
 		EXPECT_EQ(symbol->Identification.Fields().SymbolSetValue, SymbolSet::Unknown);
 		EXPECT_EQ(symbol->Identification.Fields().ContextValue, Context::Exercise);
 		EXPECT_EQ(symbol->Identification.Fields().Status, SymbolStatus::PresentDestroyed);
+		EXPECT_EQ(symbol->ExternalAmplifiers.NameOrType, "private-id");
 		ASSERT_TRUE(symbol->IsDestroyed.has_value());
 		EXPECT_TRUE(*symbol->IsDestroyed);
 	}
