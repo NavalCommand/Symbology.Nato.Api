@@ -4,6 +4,27 @@
 
 namespace NavalCommand::Symbology::Nato::Api
 {
+	TEST(DomainConverterTest, PrimaryRoleAloneSelectsAircraftMissionModifier)
+	{
+		Units::Api::Instance unit{};
+		unit.Type.Value = "aircraft";
+		Units::Api::Type type{};
+		type.Id = unit.Type;
+		type.UnitSubCategory = Classification::Api::SubCategory::FixedWingAircraft;
+		type.PlatformRoles = {Classification::Api::Role::AirSuperiority, Classification::Api::Role::ElectronicWarfare, Classification::Api::Role::AirborneEarlyWarning};
+		EXPECT_EQ(DomainConverter::FromUnit(unit, type, StandardIdentity::Friendly)->Identification.Fields().Modifier1, 0);
+		for (const auto& [role, modifier] : std::array{std::pair{Classification::Api::Role::AirSuperiority, 4},
+													   std::pair{Classification::Api::Role::AirborneEarlyWarning, 12},
+													   std::pair{Classification::Api::Role::ElectronicWarfare, 16}})
+		{
+			type.PrimaryPlatformRole = role;
+			EXPECT_EQ(DomainConverter::FromUnit(unit, type, StandardIdentity::Friendly)->Identification.Fields().Modifier1, modifier);
+			Observations::Api::Instance observation{};
+			observation.Type = decltype(observation.Type)::Known<Units::Api::TypeId>(type.Id);
+			EXPECT_EQ(DomainConverter::FromObservation(observation, type, StandardIdentity::Hostile)->Identification.Fields().Modifier1, modifier);
+		}
+	}
+
 	TEST(DomainConverterTest, MapsUnitSubcategoryAndPreservesCourseSeparatelyFromHeading)
 	{
 		Units::Api::Instance unit{};
@@ -169,42 +190,41 @@ namespace NavalCommand::Symbology::Nato::Api
 	TEST(DomainConverterTest, CoversEveryDeclaredSubcategoryWithItsDimensionAppropriateSetOrExplicitError)
 	{
 		using SubCategory = Classification::Api::SubCategory;
-		const std::array cases{
-			std::pair{SubCategory::FixedWingAircraft, SymbolSet::Air},
-			std::pair{SubCategory::RotaryWingAircraft, SymbolSet::Air},
-			std::pair{SubCategory::TiltRotorAircraft, SymbolSet::Air},
-			std::pair{SubCategory::CruiseMissile, SymbolSet::AirMissile},
-			std::pair{SubCategory::BallisticMissile, SymbolSet::AirMissile},
-			std::pair{SubCategory::AircraftCarrier, SymbolSet::SeaSurface},
-			std::pair{SubCategory::Cruiser, SymbolSet::SeaSurface},
-			std::pair{SubCategory::Destroyer, SymbolSet::SeaSurface},
-			std::pair{SubCategory::Frigate, SymbolSet::SeaSurface},
-			std::pair{SubCategory::Corvette, SymbolSet::SeaSurface},
-			std::pair{SubCategory::PatrolVessel, SymbolSet::SeaSurface},
-			std::pair{SubCategory::AmphibiousVessel, SymbolSet::SeaSurface},
-			std::pair{SubCategory::AuxiliaryVessel, SymbolSet::SeaSurface},
-			std::pair{SubCategory::MerchantVessel, SymbolSet::SeaSurface},
-			std::pair{SubCategory::AttackSubmarine, SymbolSet::SeaSubsurface},
-			std::pair{SubCategory::BallisticMissileSubmarine, SymbolSet::SeaSubsurface},
-			std::pair{SubCategory::CruiseMissileSubmarine, SymbolSet::SeaSubsurface},
-			std::pair{SubCategory::HeavyweightTorpedo, SymbolSet::SeaSubsurface},
-			std::pair{SubCategory::LightweightTorpedo, SymbolSet::SeaSubsurface},
-			std::pair{SubCategory::NavalMine, SymbolSet::MineWarfare},
-			std::pair{SubCategory::Noisemaker, SymbolSet::SeaSubsurface},
-			std::pair{SubCategory::SelfPropelledAcousticDecoy, SymbolSet::SeaSubsurface},
-			std::pair{SubCategory::Sonobuoy, SymbolSet::SeaSurface},
-			std::pair{SubCategory::GroundVehicle, SymbolSet::LandEquipment},
-			std::pair{SubCategory::SurfaceToAirMissileLauncher, SymbolSet::LandEquipment},
-			std::pair{SubCategory::AntiAircraftGun, SymbolSet::LandEquipment},
-			std::pair{SubCategory::Radar, SymbolSet::LandEquipment},
-			std::pair{SubCategory::Airfield, SymbolSet::LandInstallation},
-			std::pair{SubCategory::MilitaryInstallation, SymbolSet::LandInstallation},
-			std::pair{SubCategory::CivilianInstallation, SymbolSet::LandInstallation},
-			std::pair{SubCategory::Missile, SymbolSet::AirMissile},
-			std::pair{SubCategory::Torpedo, SymbolSet::SeaSubsurface},
-			std::pair{SubCategory::SurfaceVessel, SymbolSet::SeaSurface},
-			std::pair{SubCategory::Submarine, SymbolSet::SeaSubsurface},
-			std::pair{SubCategory::Whale, SymbolSet::SeaSubsurface}};
+		const std::array cases{std::pair{SubCategory::FixedWingAircraft, SymbolSet::Air},
+							   std::pair{SubCategory::RotaryWingAircraft, SymbolSet::Air},
+							   std::pair{SubCategory::TiltRotorAircraft, SymbolSet::Air},
+							   std::pair{SubCategory::CruiseMissile, SymbolSet::AirMissile},
+							   std::pair{SubCategory::BallisticMissile, SymbolSet::AirMissile},
+							   std::pair{SubCategory::AircraftCarrier, SymbolSet::SeaSurface},
+							   std::pair{SubCategory::Cruiser, SymbolSet::SeaSurface},
+							   std::pair{SubCategory::Destroyer, SymbolSet::SeaSurface},
+							   std::pair{SubCategory::Frigate, SymbolSet::SeaSurface},
+							   std::pair{SubCategory::Corvette, SymbolSet::SeaSurface},
+							   std::pair{SubCategory::PatrolVessel, SymbolSet::SeaSurface},
+							   std::pair{SubCategory::AmphibiousVessel, SymbolSet::SeaSurface},
+							   std::pair{SubCategory::AuxiliaryVessel, SymbolSet::SeaSurface},
+							   std::pair{SubCategory::MerchantVessel, SymbolSet::SeaSurface},
+							   std::pair{SubCategory::AttackSubmarine, SymbolSet::SeaSubsurface},
+							   std::pair{SubCategory::BallisticMissileSubmarine, SymbolSet::SeaSubsurface},
+							   std::pair{SubCategory::CruiseMissileSubmarine, SymbolSet::SeaSubsurface},
+							   std::pair{SubCategory::HeavyweightTorpedo, SymbolSet::SeaSubsurface},
+							   std::pair{SubCategory::LightweightTorpedo, SymbolSet::SeaSubsurface},
+							   std::pair{SubCategory::NavalMine, SymbolSet::MineWarfare},
+							   std::pair{SubCategory::Noisemaker, SymbolSet::SeaSubsurface},
+							   std::pair{SubCategory::SelfPropelledAcousticDecoy, SymbolSet::SeaSubsurface},
+							   std::pair{SubCategory::Sonobuoy, SymbolSet::SeaSurface},
+							   std::pair{SubCategory::GroundVehicle, SymbolSet::LandEquipment},
+							   std::pair{SubCategory::SurfaceToAirMissileLauncher, SymbolSet::LandEquipment},
+							   std::pair{SubCategory::AntiAircraftGun, SymbolSet::LandEquipment},
+							   std::pair{SubCategory::Radar, SymbolSet::LandEquipment},
+							   std::pair{SubCategory::Airfield, SymbolSet::LandInstallation},
+							   std::pair{SubCategory::MilitaryInstallation, SymbolSet::LandInstallation},
+							   std::pair{SubCategory::CivilianInstallation, SymbolSet::LandInstallation},
+							   std::pair{SubCategory::Missile, SymbolSet::AirMissile},
+							   std::pair{SubCategory::Torpedo, SymbolSet::SeaSubsurface},
+							   std::pair{SubCategory::SurfaceVessel, SymbolSet::SeaSurface},
+							   std::pair{SubCategory::Submarine, SymbolSet::SeaSubsurface},
+							   std::pair{SubCategory::Whale, SymbolSet::SeaSubsurface}};
 		Observations::Api::Instance observation{};
 		for (const auto& [subcategory, expectedSet] : cases)
 		{
@@ -224,20 +244,19 @@ namespace NavalCommand::Symbology::Nato::Api
 	TEST(DomainConverterTest, CoversEveryDeclaredCategoryAndDimensionAtItsMostSpecificAvailableLevel)
 	{
 		using Category = Classification::Api::Category;
-		const std::array categoryCases{
-			std::pair{Category::Aircraft, SymbolSet::Air},
-			std::pair{Category::Missile, SymbolSet::AirMissile},
-			std::pair{Category::SurfaceVessel, SymbolSet::SeaSurface},
-			std::pair{Category::Submarine, SymbolSet::SeaSubsurface},
-			std::pair{Category::Torpedo, SymbolSet::SeaSubsurface},
-			std::pair{Category::Mine, SymbolSet::MineWarfare},
-			std::pair{Category::LandEquipment, SymbolSet::LandEquipment},
-			std::pair{Category::LandInstallation, SymbolSet::LandInstallation},
-			std::pair{Category::LandUnit, SymbolSet::LandUnit},
-			std::pair{Category::SpaceObject, SymbolSet::Space},
-			std::pair{Category::SurfaceDevice, SymbolSet::SeaSurface},
-			std::pair{Category::SubsurfaceDevice, SymbolSet::SeaSubsurface},
-			std::pair{Category::SeaAnimal, SymbolSet::SeaSubsurface}};
+		const std::array categoryCases{std::pair{Category::Aircraft, SymbolSet::Air},
+									   std::pair{Category::Missile, SymbolSet::AirMissile},
+									   std::pair{Category::SurfaceVessel, SymbolSet::SeaSurface},
+									   std::pair{Category::Submarine, SymbolSet::SeaSubsurface},
+									   std::pair{Category::Torpedo, SymbolSet::SeaSubsurface},
+									   std::pair{Category::Mine, SymbolSet::MineWarfare},
+									   std::pair{Category::LandEquipment, SymbolSet::LandEquipment},
+									   std::pair{Category::LandInstallation, SymbolSet::LandInstallation},
+									   std::pair{Category::LandUnit, SymbolSet::LandUnit},
+									   std::pair{Category::SpaceObject, SymbolSet::Space},
+									   std::pair{Category::SurfaceDevice, SymbolSet::SeaSurface},
+									   std::pair{Category::SubsurfaceDevice, SymbolSet::SeaSubsurface},
+									   std::pair{Category::SeaAnimal, SymbolSet::SeaSubsurface}};
 		Observations::Api::Instance observation{};
 		for (const auto& [category, expectedSet] : categoryCases)
 		{
@@ -250,12 +269,11 @@ namespace NavalCommand::Symbology::Nato::Api
 		EXPECT_FALSE(DomainConverter::FromObservation(observation, std::nullopt, StandardIdentity::Unknown));
 
 		using Dimension = Classification::Api::Dimension;
-		const std::array dimensionCases{
-			std::pair{Dimension::Air, SymbolSet::Air},
-			std::pair{Dimension::Land, SymbolSet::LandUnit},
-			std::pair{Dimension::SeaSurface, SymbolSet::SeaSurface},
-			std::pair{Dimension::SeaSubsurface, SymbolSet::SeaSubsurface},
-			std::pair{Dimension::Space, SymbolSet::Space}};
+		const std::array dimensionCases{std::pair{Dimension::Air, SymbolSet::Air},
+										std::pair{Dimension::Land, SymbolSet::LandUnit},
+										std::pair{Dimension::SeaSurface, SymbolSet::SeaSurface},
+										std::pair{Dimension::SeaSubsurface, SymbolSet::SeaSubsurface},
+										std::pair{Dimension::Space, SymbolSet::Space}};
 		for (const auto& [dimension, expectedSet] : dimensionCases)
 		{
 			observation.Type = decltype(observation.Type)::Known<Dimension>(dimension);
@@ -300,20 +318,20 @@ namespace NavalCommand::Symbology::Nato::Api
 			std::uint8_t EntitySubtype;
 			std::uint8_t Modifier1;
 		};
-		const std::array assignments{
-			ExpectedAssignment{SubCategory::Destroyer, SymbolSet::SeaSurface, 12, 2, 3, 0},
-			ExpectedAssignment{SubCategory::Frigate, SymbolSet::SeaSurface, 12, 2, 4, 0},
-			ExpectedAssignment{SubCategory::Corvette, SymbolSet::SeaSurface, 12, 2, 5, 0},
-			ExpectedAssignment{SubCategory::PatrolVessel, SymbolSet::SeaSurface, 12, 5, 0, 0},
-			ExpectedAssignment{SubCategory::AmphibiousVessel, SymbolSet::SeaSurface, 12, 3, 0, 0},
-			ExpectedAssignment{SubCategory::AuxiliaryVessel, SymbolSet::SeaSurface, 13, 1, 0, 0},
-			ExpectedAssignment{SubCategory::MerchantVessel, SymbolSet::SeaSurface, 14, 1, 0, 0},
-			ExpectedAssignment{SubCategory::AttackSubmarine, SymbolSet::SeaSubsurface, 11, 1, 0, 8},
-			ExpectedAssignment{SubCategory::BallisticMissileSubmarine, SymbolSet::SeaSubsurface, 11, 1, 0, 9},
-			ExpectedAssignment{SubCategory::CruiseMissileSubmarine, SymbolSet::SeaSubsurface, 11, 1, 0, 10},
-			ExpectedAssignment{SubCategory::NavalMine, SymbolSet::MineWarfare, 11, 0, 0, 0},
-			ExpectedAssignment{SubCategory::SurfaceToAirMissileLauncher, SymbolSet::LandEquipment, 11, 11, 0, 0},
-			ExpectedAssignment{SubCategory::AntiAircraftGun, SymbolSet::LandEquipment, 11, 5, 0, 0}};
+		const std::array assignments{ExpectedAssignment{SubCategory::Cruiser, SymbolSet::SeaSurface, 12, 2, 2, 0},
+									 ExpectedAssignment{SubCategory::Destroyer, SymbolSet::SeaSurface, 12, 2, 3, 0},
+									 ExpectedAssignment{SubCategory::Frigate, SymbolSet::SeaSurface, 12, 2, 4, 0},
+									 ExpectedAssignment{SubCategory::Corvette, SymbolSet::SeaSurface, 12, 2, 5, 0},
+									 ExpectedAssignment{SubCategory::PatrolVessel, SymbolSet::SeaSurface, 12, 5, 0, 0},
+									 ExpectedAssignment{SubCategory::AmphibiousVessel, SymbolSet::SeaSurface, 12, 3, 0, 0},
+									 ExpectedAssignment{SubCategory::AuxiliaryVessel, SymbolSet::SeaSurface, 13, 1, 0, 0},
+									 ExpectedAssignment{SubCategory::MerchantVessel, SymbolSet::SeaSurface, 14, 1, 0, 0},
+									 ExpectedAssignment{SubCategory::AttackSubmarine, SymbolSet::SeaSubsurface, 11, 1, 0, 8},
+									 ExpectedAssignment{SubCategory::BallisticMissileSubmarine, SymbolSet::SeaSubsurface, 11, 1, 0, 9},
+									 ExpectedAssignment{SubCategory::CruiseMissileSubmarine, SymbolSet::SeaSubsurface, 11, 1, 0, 10},
+									 ExpectedAssignment{SubCategory::NavalMine, SymbolSet::MineWarfare, 11, 0, 0, 0},
+									 ExpectedAssignment{SubCategory::SurfaceToAirMissileLauncher, SymbolSet::LandEquipment, 11, 11, 0, 0},
+									 ExpectedAssignment{SubCategory::AntiAircraftGun, SymbolSet::LandEquipment, 11, 5, 0, 0}};
 		Observations::Api::Instance observation{};
 		for (const auto& assignment : assignments)
 		{
@@ -334,8 +352,7 @@ namespace NavalCommand::Symbology::Nato::Api
 		Observations::Api::Instance observation{};
 		Observations::Api::PartiallyLocalizedPosition partial;
 		partial.Latitude = Physics::Api::Degrees{50.0};
-		partial.ErrorEllipse = Observations::Api::ObservedErrorEllipse{
-			Physics::Api::Meters{250.0}, Physics::Api::Meters{100.0}, Physics::Api::Radians{0.4}};
+		partial.ErrorEllipse = Observations::Api::ObservedErrorEllipse{Physics::Api::Meters{250.0}, Physics::Api::Meters{100.0}, Physics::Api::Radians{0.4}};
 		observation.Kinematics.Position = partial;
 
 		const auto symbol = DomainConverter::FromObservation(observation, std::nullopt, StandardIdentity::Unknown);

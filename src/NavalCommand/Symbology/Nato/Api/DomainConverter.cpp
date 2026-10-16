@@ -68,7 +68,7 @@ namespace NavalCommand::Symbology::Nato::Api
 			case SubCategory::AircraftCarrier:
 				return ClassificationCode{SymbolSet::SeaSurface, 12, 1, 0, 0, "Aircraft carrier"};
 			case SubCategory::Cruiser:
-				return ClassificationCode{SymbolSet::SeaSurface, 12, 2, 0, 0, "Surface combatant"};
+				return ClassificationCode{SymbolSet::SeaSurface, 12, 2, 2, 0, "Cruiser"};
 			case SubCategory::Destroyer:
 				return ClassificationCode{SymbolSet::SeaSurface, 12, 2, 3, 0, "Destroyer"};
 			case SubCategory::Frigate:
@@ -122,7 +122,7 @@ namespace NavalCommand::Symbology::Nato::Api
 				return ClassificationCode{SymbolSet::SeaSurface, 0, 0, 0, 0, "Surface vessel"};
 			case SubCategory::Other:
 				return std::unexpected(Error(ConversionErrorCode::UnsupportedClassification, "APP-06(E)(1) has no safe generic mapping for the known Other subcategory."));
-		}
+			}
 			return std::unexpected(Error(ConversionErrorCode::InvalidDomainValue, "Domain subcategory is not a declared classification value."));
 		}
 
@@ -158,7 +158,7 @@ namespace NavalCommand::Symbology::Nato::Api
 				return ClassificationCode{SymbolSet::SeaSubsurface, 0, 0, 0, 0, "Sea animal"};
 			case Category::Other:
 				return std::unexpected(Error(ConversionErrorCode::UnsupportedClassification, "APP-06(E)(1) has no safe generic mapping for the known Other category."));
-		}
+			}
 			return std::unexpected(Error(ConversionErrorCode::InvalidDomainValue, "Domain category is not a declared classification value."));
 		}
 
@@ -178,7 +178,7 @@ namespace NavalCommand::Symbology::Nato::Api
 				return ClassificationCode{SymbolSet::Space};
 			case Dimension::Other:
 				return std::unexpected(Error(ConversionErrorCode::UnsupportedClassification, "The known Other dimension has no APP-06(E)(1) dimension symbol set."));
-		}
+			}
 			return std::unexpected(Error(ConversionErrorCode::InvalidDomainValue, "Domain dimension is not a declared classification value."));
 		}
 
@@ -189,12 +189,47 @@ namespace NavalCommand::Symbology::Nato::Api
 			{
 				return classification;
 			}
-			const bool airSuperiority = std::ranges::find(type.PlatformRoles, Classification::Api::Role::AirSuperiority) != type.PlatformRoles.end();
-			if (type.UnitSubCategory == SubCategory::FixedWingAircraft && airSuperiority)
+			if (type.UnitSubCategory == SubCategory::FixedWingAircraft || type.UnitSubCategory == SubCategory::RotaryWingAircraft)
 			{
-				classification->Modifier1 = 4; // Fighter.
+				using Classification::Api::Role;
+				if (type.PrimaryPlatformRole)
+				{
+					switch (*type.PrimaryPlatformRole)
+					{
+					case Role::AirSuperiority:
+						classification->Modifier1 = 4;
+						break;
+					case Role::AirborneEarlyWarning:
+						classification->Modifier1 = 12;
+						break;
+					case Role::ElectronicWarfare:
+						classification->Modifier1 = 16;
+						break;
+					case Role::Strike:
+					case Role::LandAttack:
+						classification->Modifier1 = 1;
+						break;
+					case Role::AntiSubmarineWarfare:
+						classification->Modifier1 = 2;
+						break;
+					case Role::Transport:
+						classification->Modifier1 = 3;
+						break;
+					case Role::AerialRefuelling:
+						classification->Modifier1 = 5;
+						break;
+					case Role::MaritimePatrol:
+						classification->Modifier1 = 17;
+						break;
+					case Role::Reconnaissance:
+						classification->Modifier1 = 18;
+						break;
+					default:
+						break;
+					}
+				}
 			}
-			if (type.UnitSubCategory == SubCategory::Missile && airSuperiority)
+			if (type.UnitSubCategory == SubCategory::Missile && type.PrimaryPlatformRole == Classification::Api::Role::AirSuperiority)
 			{
 				classification->Modifier1 = 1; // Air launch origin.
 				classification->Modifier2 = 1; // Air destination.
@@ -252,10 +287,8 @@ namespace NavalCommand::Symbology::Nato::Api
 				}
 				if (partial->ErrorEllipse)
 				{
-					position.Uncertainty = GeographicUncertaintyEllipse{
-						partial->ErrorEllipse->MajorAxis.Value,
-						partial->ErrorEllipse->MinorAxis.Value,
-						partial->ErrorEllipse->Orientation.Value};
+					position.Uncertainty =
+						GeographicUncertaintyEllipse{partial->ErrorEllipse->MajorAxis.Value, partial->ErrorEllipse->MinorAxis.Value, partial->ErrorEllipse->Orientation.Value};
 				}
 			}
 			if (position.Location.LatitudeDegrees || position.Location.LongitudeDegrees || position.Uncertainty)
@@ -277,12 +310,7 @@ namespace NavalCommand::Symbology::Nato::Api
 		}
 
 		std::expected<Symbol, ConversionError> MakeSymbol(
-			const ClassificationCode& classification,
-			StandardIdentity identity,
-			SymbolStatus status,
-			Amplifiers amplifiers,
-			Context context,
-			std::optional<bool> isDestroyed)
+			const ClassificationCode& classification, StandardIdentity identity, SymbolStatus status, Amplifiers amplifiers, Context context, std::optional<bool> isDestroyed)
 		{
 			SidcFields fields;
 			fields.ContextValue = context;
@@ -306,9 +334,8 @@ namespace NavalCommand::Symbology::Nato::Api
 			return Symbol{std::move(*sidc), std::move(amplifiers), isDestroyed};
 		}
 
-		std::expected<ClassificationCode, ConversionError> ObservationClassification(
-			const Observations::Api::Instance& observation,
-			const std::optional<Units::Api::Type>& authorizedTypeDefinition)
+		std::expected<ClassificationCode, ConversionError> ObservationClassification(const Observations::Api::Instance& observation,
+																					 const std::optional<Units::Api::Type>& authorizedTypeDefinition)
 		{
 			if (const auto* exactTypeId = observation.Type.GetIf<Units::Api::TypeId>())
 			{
@@ -353,11 +380,8 @@ namespace NavalCommand::Symbology::Nato::Api
 		return StandardIdentity::Unknown;
 	}
 
-	std::expected<Symbol, ConversionError> DomainConverter::FromUnit(
-		const Units::Api::Instance& unit,
-		const std::optional<Units::Api::Type>& authorizedTypeDefinition,
-		StandardIdentity identity,
-		Context context)
+	std::expected<Symbol, ConversionError>
+	DomainConverter::FromUnit(const Units::Api::Instance& unit, const std::optional<Units::Api::Type>& authorizedTypeDefinition, StandardIdentity identity, Context context)
 	{
 		// A TypeId identifies the domain type; its matching catalog record supplies the subcategory.
 		ClassificationCode classification;
@@ -379,20 +403,13 @@ namespace NavalCommand::Symbology::Nato::Api
 		amplifiers.UniqueDesignation = unit.Name.empty() ? unit.Identity.Value : unit.Name;
 		amplifiers.NameOrType = TypeLabel(unit.Type, authorizedTypeDefinition);
 		CopyPosition(unit.Kinematics, amplifiers);
-		return MakeSymbol(
-			classification,
-			identity,
-			unit.IsDestroyed ? SymbolStatus::PresentDestroyed : SymbolStatus::Present,
-			std::move(amplifiers),
-			context,
-			unit.IsDestroyed);
+		return MakeSymbol(classification, identity, unit.IsDestroyed ? SymbolStatus::PresentDestroyed : SymbolStatus::Present, std::move(amplifiers), context, unit.IsDestroyed);
 	}
 
-	std::expected<Symbol, ConversionError> DomainConverter::FromObservation(
-		const Observations::Api::Instance& observation,
-		const std::optional<Units::Api::Type>& authorizedTypeDefinition,
-		StandardIdentity identity,
-		Context context)
+	std::expected<Symbol, ConversionError> DomainConverter::FromObservation(const Observations::Api::Instance& observation,
+																			const std::optional<Units::Api::Type>& authorizedTypeDefinition,
+																			StandardIdentity identity,
+																			Context context)
 	{
 		auto classification = ObservationClassification(observation, authorizedTypeDefinition);
 		if (!classification)
@@ -411,12 +428,8 @@ namespace NavalCommand::Symbology::Nato::Api
 			classification->Name = "Observer-resolved classification";
 		}
 		CopyPosition(observation.Kinematics, amplifiers);
-		const std::optional<bool> isDestroyed = observation.IsDestroyed.IsKnown()
-			? std::optional{observation.IsDestroyed.Value()}
-			: std::nullopt;
-		const auto status = isDestroyed.value_or(false)
-			? SymbolStatus::PresentDestroyed
-			: SymbolStatus::Present;
+		const std::optional<bool> isDestroyed = observation.IsDestroyed.IsKnown() ? std::optional{observation.IsDestroyed.Value()} : std::nullopt;
+		const auto status = isDestroyed.value_or(false) ? SymbolStatus::PresentDestroyed : SymbolStatus::Present;
 		return MakeSymbol(*classification, identity, status, std::move(amplifiers), context, isDestroyed);
 	}
 }
