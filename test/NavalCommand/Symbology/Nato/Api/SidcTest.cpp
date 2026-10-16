@@ -5,6 +5,37 @@
 
 namespace NavalCommand::Symbology::Nato::Api
 {
+	TEST(SidcTest, ValidatesSubsurfaceLocalModifierAssignmentsAndApplicability)
+	{
+		SidcFields fields;
+		fields.SymbolSetValue = SymbolSet::SeaSubsurface;
+		fields.Entity = 11;
+		fields.EntityType = 1;
+		for (std::uint8_t modifier = 0; modifier < 100; ++modifier)
+		{
+			fields.Modifier1 = modifier;
+			const bool assigned = modifier == 0 || modifier == 2 || (modifier >= 13 && modifier <= 18);
+			EXPECT_EQ(Sidc::Create(fields).has_value(), assigned) << static_cast<int>(modifier);
+		}
+		fields.Modifier1 = 19;
+		fields.Entity = 13;
+		EXPECT_TRUE(Sidc::Create(fields));
+		fields.Modifier1 = 2;
+		EXPECT_FALSE(Sidc::Create(fields));
+		fields.Entity = 11;
+		fields.Modifier1 = 0;
+		for (std::uint8_t modifier = 0; modifier < 100; ++modifier)
+		{
+			fields.Modifier2 = modifier;
+			EXPECT_EQ(Sidc::Create(fields).has_value(), modifier <= 13);
+		}
+		fields.Modifier2 = 0;
+		fields.Modifier1 = 51;
+		fields.ThirdTen[0] = '1';
+		EXPECT_TRUE(Sidc::Create(fields)); // Common ASW 151, not local 51.
+		EXPECT_FALSE(Sidc::Parse("140335000011010008000000000000"));
+	}
+
 	TEST(SidcTest, PreservesAllThirtyPositions)
 	{
 		constexpr std::string_view example{"140310021612040100060100000000"};
@@ -54,39 +85,38 @@ namespace NavalCommand::Symbology::Nato::Api
 
 	TEST(SidcTest, AcceptsEveryDeclaredSymbolSet)
 	{
-		constexpr std::array symbolSets{
-			SymbolSet::Unknown,
-			SymbolSet::Air,
-			SymbolSet::AirMissile,
-			SymbolSet::Space,
-			SymbolSet::SpaceMissile,
-			SymbolSet::LandUnit,
-			SymbolSet::LandCivilianUnit,
-			SymbolSet::LandEquipment,
-			SymbolSet::LandInstallation,
-			SymbolSet::ControlMeasure,
-			SymbolSet::DismountedIndividual,
-			SymbolSet::SeaSurface,
-			SymbolSet::SeaSubsurface,
-			SymbolSet::MineWarfare,
-			SymbolSet::Activities,
-			SymbolSet::Atmospheric,
-			SymbolSet::Oceanographic,
-			SymbolSet::MeteorologicalSpace,
-			SymbolSet::SignalsIntelligenceSpace,
-			SymbolSet::SignalsIntelligenceAir,
-			SymbolSet::SignalsIntelligenceLandEquipment,
-			SymbolSet::SignalsIntelligenceSeaSurface,
-			SymbolSet::SignalsIntelligenceSeaSubsurface,
-			SymbolSet::Cyberspace,
-			SymbolSet::CyberspaceSpace,
-			SymbolSet::CyberspaceAir,
-			SymbolSet::CyberspaceLandUnit,
-			SymbolSet::CyberspaceLandEquipment,
-			SymbolSet::CyberspaceLandInstallation,
-			SymbolSet::CyberspaceDismountedIndividual,
-			SymbolSet::CyberspaceSeaSurface,
-			SymbolSet::CyberspaceSeaSubsurface};
+		constexpr std::array symbolSets{SymbolSet::Unknown,
+										SymbolSet::Air,
+										SymbolSet::AirMissile,
+										SymbolSet::Space,
+										SymbolSet::SpaceMissile,
+										SymbolSet::LandUnit,
+										SymbolSet::LandCivilianUnit,
+										SymbolSet::LandEquipment,
+										SymbolSet::LandInstallation,
+										SymbolSet::ControlMeasure,
+										SymbolSet::DismountedIndividual,
+										SymbolSet::SeaSurface,
+										SymbolSet::SeaSubsurface,
+										SymbolSet::MineWarfare,
+										SymbolSet::Activities,
+										SymbolSet::Atmospheric,
+										SymbolSet::Oceanographic,
+										SymbolSet::MeteorologicalSpace,
+										SymbolSet::SignalsIntelligenceSpace,
+										SymbolSet::SignalsIntelligenceAir,
+										SymbolSet::SignalsIntelligenceLandEquipment,
+										SymbolSet::SignalsIntelligenceSeaSurface,
+										SymbolSet::SignalsIntelligenceSeaSubsurface,
+										SymbolSet::Cyberspace,
+										SymbolSet::CyberspaceSpace,
+										SymbolSet::CyberspaceAir,
+										SymbolSet::CyberspaceLandUnit,
+										SymbolSet::CyberspaceLandEquipment,
+										SymbolSet::CyberspaceLandInstallation,
+										SymbolSet::CyberspaceDismountedIndividual,
+										SymbolSet::CyberspaceSeaSurface,
+										SymbolSet::CyberspaceSeaSubsurface};
 
 		for (const SymbolSet symbolSet : symbolSets)
 		{

@@ -4,6 +4,42 @@
 
 namespace NavalCommand::Symbology::Nato::Api
 {
+	TEST(DomainConverterTest, SubmarinePhysicalTypesNeverInferMissionOrPropulsion)
+	{
+		using Classification::Api::Role;
+		using Classification::Api::SubCategory;
+		for (auto subcategory : {SubCategory::Submarine, SubCategory::AttackSubmarine, SubCategory::BallisticMissileSubmarine, SubCategory::CruiseMissileSubmarine})
+		{
+			Units::Api::Instance unit{};
+			unit.Type.Value = "submarine";
+			Units::Api::Type type{};
+			type.Id = unit.Type;
+			type.UnitSubCategory = subcategory;
+			type.PlatformRoles = {Role::Strike, Role::SurfaceWarfare, Role::AntiSubmarineWarfare};
+			const auto symbol = DomainConverter::FromUnit(unit, type, StandardIdentity::Friendly);
+			ASSERT_TRUE(symbol);
+			EXPECT_EQ(symbol->Identification.ToString(), "140335000011010000000000000000");
+			Observations::Api::Instance observation{};
+			observation.Type = decltype(observation.Type)::Known<Units::Api::TypeId>(unit.Type);
+			ASSERT_TRUE(DomainConverter::FromObservation(observation, type, StandardIdentity::Friendly));
+			EXPECT_EQ(DomainConverter::FromObservation(observation, type, StandardIdentity::Friendly)->Identification.ToString(), symbol->Identification.ToString());
+			observation.Type = decltype(observation.Type)::Known<SubCategory>(subcategory);
+			EXPECT_EQ(DomainConverter::FromObservation(observation, type, StandardIdentity::Friendly)->Identification.ToString(), symbol->Identification.ToString());
+			for (const auto& [role, modifier] : std::array{std::pair{Role::AntiSubmarineWarfare, 51}, std::pair{Role::SurfaceWarfare, 55}, std::pair{Role::Strike, 6}})
+			{
+				type.PrimaryPlatformRole = role;
+				const auto specialized = DomainConverter::FromUnit(unit, type, StandardIdentity::Friendly);
+				ASSERT_TRUE(specialized);
+				const int expectedModifier = subcategory == SubCategory::BallisticMissileSubmarine && role == Role::Strike ? 8 : modifier;
+				EXPECT_EQ(specialized->Identification.Fields().Modifier1, expectedModifier);
+				EXPECT_EQ(specialized->Identification.Fields().ThirdTen[0], '1');
+				EXPECT_EQ(specialized->Identification.Fields().Modifier2, 0);
+				// A catalog record cannot add a mission to a partially classified track.
+				EXPECT_EQ(DomainConverter::FromObservation(observation, type, StandardIdentity::Friendly)->Identification.Fields().Modifier1, 0);
+			}
+		}
+	}
+
 	TEST(DomainConverterTest, ApplicablePrimaryRolesCoverAllPhysicalSubcategories)
 	{
 		using Classification::Api::Role;
@@ -425,9 +461,9 @@ namespace NavalCommand::Symbology::Nato::Api
 									 ExpectedAssignment{SubCategory::AmphibiousVessel, SymbolSet::SeaSurface, 12, 3, 0, 0},
 									 ExpectedAssignment{SubCategory::AuxiliaryVessel, SymbolSet::SeaSurface, 13, 1, 0, 0},
 									 ExpectedAssignment{SubCategory::MerchantVessel, SymbolSet::SeaSurface, 14, 1, 0, 0},
-									 ExpectedAssignment{SubCategory::AttackSubmarine, SymbolSet::SeaSubsurface, 11, 1, 0, 8},
-									 ExpectedAssignment{SubCategory::BallisticMissileSubmarine, SymbolSet::SeaSubsurface, 11, 1, 0, 9},
-									 ExpectedAssignment{SubCategory::CruiseMissileSubmarine, SymbolSet::SeaSubsurface, 11, 1, 0, 10},
+									 ExpectedAssignment{SubCategory::AttackSubmarine, SymbolSet::SeaSubsurface, 11, 1, 0, 0},
+									 ExpectedAssignment{SubCategory::BallisticMissileSubmarine, SymbolSet::SeaSubsurface, 11, 1, 0, 0},
+									 ExpectedAssignment{SubCategory::CruiseMissileSubmarine, SymbolSet::SeaSubsurface, 11, 1, 0, 0},
 									 ExpectedAssignment{SubCategory::NavalMine, SymbolSet::MineWarfare, 11, 0, 0, 0},
 									 ExpectedAssignment{SubCategory::SurfaceToAirMissileLauncher, SymbolSet::LandEquipment, 11, 11, 0, 0},
 									 ExpectedAssignment{SubCategory::AntiAircraftGun, SymbolSet::LandEquipment, 11, 5, 0, 0}};

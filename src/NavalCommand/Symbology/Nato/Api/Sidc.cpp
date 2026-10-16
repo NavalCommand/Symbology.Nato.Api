@@ -8,39 +8,38 @@ namespace NavalCommand::Symbology::Nato::Api
 {
 	namespace
 	{
-		constexpr std::array SupportedSymbolSets{
-			SymbolSet::Unknown,
-			SymbolSet::Air,
-			SymbolSet::AirMissile,
-			SymbolSet::Space,
-			SymbolSet::SpaceMissile,
-			SymbolSet::LandUnit,
-			SymbolSet::LandCivilianUnit,
-			SymbolSet::LandEquipment,
-			SymbolSet::LandInstallation,
-			SymbolSet::ControlMeasure,
-			SymbolSet::DismountedIndividual,
-			SymbolSet::SeaSurface,
-			SymbolSet::SeaSubsurface,
-			SymbolSet::MineWarfare,
-			SymbolSet::Activities,
-			SymbolSet::Atmospheric,
-			SymbolSet::Oceanographic,
-			SymbolSet::MeteorologicalSpace,
-			SymbolSet::SignalsIntelligenceSpace,
-			SymbolSet::SignalsIntelligenceAir,
-			SymbolSet::SignalsIntelligenceLandEquipment,
-			SymbolSet::SignalsIntelligenceSeaSurface,
-			SymbolSet::SignalsIntelligenceSeaSubsurface,
-			SymbolSet::Cyberspace,
-			SymbolSet::CyberspaceSpace,
-			SymbolSet::CyberspaceAir,
-			SymbolSet::CyberspaceLandUnit,
-			SymbolSet::CyberspaceLandEquipment,
-			SymbolSet::CyberspaceLandInstallation,
-			SymbolSet::CyberspaceDismountedIndividual,
-			SymbolSet::CyberspaceSeaSurface,
-			SymbolSet::CyberspaceSeaSubsurface};
+		constexpr std::array SupportedSymbolSets{SymbolSet::Unknown,
+												 SymbolSet::Air,
+												 SymbolSet::AirMissile,
+												 SymbolSet::Space,
+												 SymbolSet::SpaceMissile,
+												 SymbolSet::LandUnit,
+												 SymbolSet::LandCivilianUnit,
+												 SymbolSet::LandEquipment,
+												 SymbolSet::LandInstallation,
+												 SymbolSet::ControlMeasure,
+												 SymbolSet::DismountedIndividual,
+												 SymbolSet::SeaSurface,
+												 SymbolSet::SeaSubsurface,
+												 SymbolSet::MineWarfare,
+												 SymbolSet::Activities,
+												 SymbolSet::Atmospheric,
+												 SymbolSet::Oceanographic,
+												 SymbolSet::MeteorologicalSpace,
+												 SymbolSet::SignalsIntelligenceSpace,
+												 SymbolSet::SignalsIntelligenceAir,
+												 SymbolSet::SignalsIntelligenceLandEquipment,
+												 SymbolSet::SignalsIntelligenceSeaSurface,
+												 SymbolSet::SignalsIntelligenceSeaSubsurface,
+												 SymbolSet::Cyberspace,
+												 SymbolSet::CyberspaceSpace,
+												 SymbolSet::CyberspaceAir,
+												 SymbolSet::CyberspaceLandUnit,
+												 SymbolSet::CyberspaceLandEquipment,
+												 SymbolSet::CyberspaceLandInstallation,
+												 SymbolSet::CyberspaceDismountedIndividual,
+												 SymbolSet::CyberspaceSeaSurface,
+												 SymbolSet::CyberspaceSeaSubsurface};
 		constexpr std::string_view SIDC_VERSION{"14"};
 
 		SidcError Error(SidcErrorCode code, std::string message)
@@ -94,14 +93,36 @@ namespace NavalCommand::Symbology::Nato::Api
 		{
 			return std::unexpected(Error(SidcErrorCode::InvalidCharacter, "The third ten positions must contain uppercase hexadecimal characters."));
 		}
-		if (!std::all_of(fields.ThirdTen.begin() + 2, fields.ThirdTen.begin() + 7, [](char character) { return character == '0'; }))
+		if (!std::all_of(fields.ThirdTen.begin() + 2,
+						 fields.ThirdTen.begin() + 7,
+						 [](char character)
+						 {
+							 return character == '0';
+						 }))
 		{
 			return std::unexpected(Error(SidcErrorCode::InvalidCombination, "APP-06(E)(1) reserves third-ten positions 23 through 27; they must be zero."));
 		}
-		if ((fields.Entity == 0 && (fields.EntityType != 0 || fields.EntitySubtype != 0))
-			|| (fields.EntityType == 0 && fields.EntitySubtype != 0))
+		if ((fields.Entity == 0 && (fields.EntityType != 0 || fields.EntitySubtype != 0)) || (fields.EntityType == 0 && fields.EntitySubtype != 0))
 		{
 			return std::unexpected(Error(SidcErrorCode::InvalidCombination, "Entity, entity type, and entity subtype must follow the APP-06 hierarchy."));
+		}
+		if (fields.SymbolSetValue == SymbolSet::SeaSubsurface)
+		{
+			// APP-06(E)(1), A-42/A-43. Common modifiers use third-ten extension digits.
+			const bool submarine = fields.Entity == 11 && fields.EntityType == 1;
+			if (fields.ThirdTen[0] == '0' && fields.Modifier1 != 0)
+			{
+				const bool submarineModifier = fields.Modifier1 == 2 || (fields.Modifier1 >= 13 && fields.Modifier1 <= 18);
+				const bool antiTorpedo = fields.Modifier1 == 19 && fields.Entity == 13 && fields.EntityType == 1;
+				if (!(submarineModifier && submarine) && !antiTorpedo)
+				{
+					return std::unexpected(Error(SidcErrorCode::InvalidCombination, "Unassigned or inapplicable Sea Subsurface sector-1 modifier (Table A-42)."));
+				}
+			}
+			if (fields.ThirdTen[1] == '0' && fields.Modifier2 != 0 && (!submarine || fields.Modifier2 > 13))
+			{
+				return std::unexpected(Error(SidcErrorCode::InvalidCombination, "Unassigned or inapplicable Sea Subsurface propulsion modifier (Table A-43)."));
+			}
 		}
 		return Sidc{std::move(fields)};
 	}
@@ -120,7 +141,12 @@ namespace NavalCommand::Symbology::Nato::Api
 		{
 			return std::unexpected(Error(SidcErrorCode::UnsupportedVersion, "Only APP-06(E), Edition E, Version 1 (version code 14) is accepted."));
 		}
-		if (!std::all_of(code.begin() + 2, code.begin() + 20, [](char character) { return character >= '0' && character <= '9'; }))
+		if (!std::all_of(code.begin() + 2,
+						 code.begin() + 20,
+						 [](char character)
+						 {
+							 return character >= '0' && character <= '9';
+						 }))
 		{
 			return std::unexpected(Error(SidcErrorCode::InvalidFieldValue, "The supported APP-06(E)(1) core field values are decimal assignments."));
 		}

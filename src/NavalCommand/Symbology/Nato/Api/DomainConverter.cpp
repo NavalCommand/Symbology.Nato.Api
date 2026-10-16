@@ -85,12 +85,11 @@ namespace NavalCommand::Symbology::Nato::Api
 			case SubCategory::MerchantVessel:
 				return ClassificationCode{SymbolSet::SeaSurface, 14, 1, 0, 0, "Merchant ship"};
 			case SubCategory::AttackSubmarine:
-				return ClassificationCode{SymbolSet::SeaSubsurface, 11, 1, 0, 8, "Submarine"};
 			case SubCategory::BallisticMissileSubmarine:
-				return ClassificationCode{SymbolSet::SeaSubsurface, 11, 1, 0, 9, "Submarine"};
 			case SubCategory::CruiseMissileSubmarine:
-				return ClassificationCode{SymbolSet::SeaSubsurface, 11, 1, 0, 10, "Submarine"};
 			case SubCategory::Submarine:
+				// Table A-41 has no attack/ballistic/cruise submarine entity types.
+				// Hull classification alone supplies neither a mission nor propulsion.
 				return ClassificationCode{SymbolSet::SeaSubsurface, 11, 1, 0, 0, "Submarine"};
 			case SubCategory::HeavyweightTorpedo:
 			case SubCategory::LightweightTorpedo:
@@ -265,7 +264,7 @@ namespace NavalCommand::Symbology::Nato::Api
 			}
 
 			// Common sector 1 mission modifiers apply independently of physical type.
-			// Keep an assigned aircraft mission; retain B for strategic missile submarines.
+			// Keep an assigned aircraft mission. Absence never selects a mission.
 			if (type.PrimaryPlatformRole && (classification->Modifier1 == 0 || classification->Set == SymbolSet::SeaSubsurface))
 			{
 				using Classification::Api::Role;
@@ -291,10 +290,9 @@ namespace NavalCommand::Symbology::Nato::Api
 					break;
 				case Role::Strike:
 				case Role::LandAttack:
-					if (type.UnitSubCategory != SubCategory::BallisticMissileSubmarine)
-					{
-						commonModifier = 6;
-					}
+					// An explicit strike mission plus a known ballistic-missile hull
+					// supports common 108 (BM); an absent primary still emits no modifier.
+					commonModifier = type.UnitSubCategory == SubCategory::BallisticMissileSubmarine ? 8 : 6;
 					break;
 				case Role::Transport:
 					commonModifier = 10;
@@ -324,8 +322,7 @@ namespace NavalCommand::Symbology::Nato::Api
 			const bool missionInMainIcon = (type.PrimaryPlatformRole == Classification::Api::Role::Decoy &&
 											(type.UnitSubCategory == SubCategory::Noisemaker || type.UnitSubCategory == SubCategory::SelfPropelledAcousticDecoy)) ||
 										   (type.PrimaryPlatformRole == Classification::Api::Role::AirDefence &&
-											(type.UnitSubCategory == SubCategory::SurfaceToAirMissileLauncher || type.UnitSubCategory == SubCategory::AntiAircraftGun)) ||
-										   (type.PrimaryPlatformRole == Classification::Api::Role::Strike && type.UnitSubCategory == SubCategory::BallisticMissileSubmarine);
+											(type.UnitSubCategory == SubCategory::SurfaceToAirMissileLauncher || type.UnitSubCategory == SubCategory::AntiAircraftGun));
 			if (type.PrimaryPlatformRole && !missionChanged && !missionInMainIcon)
 			{
 				return std::unexpected(
