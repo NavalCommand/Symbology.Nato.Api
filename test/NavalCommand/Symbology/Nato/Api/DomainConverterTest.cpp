@@ -4,6 +4,86 @@
 
 namespace NavalCommand::Symbology::Nato::Api
 {
+	TEST(DomainConverterTest, ApplicablePrimaryRolesCoverAllPhysicalSubcategories)
+	{
+		using Classification::Api::Role;
+		using Classification::Api::SubCategory;
+		const std::array cases{std::pair{SubCategory::FixedWingAircraft, Role::AntiSubmarineWarfare},
+							   std::pair{SubCategory::RotaryWingAircraft, Role::AntiSubmarineWarfare},
+							   std::pair{SubCategory::TiltRotorAircraft, Role::AntiSubmarineWarfare},
+							   std::pair{SubCategory::CruiseMissile, Role::SurfaceWarfare},
+							   std::pair{SubCategory::BallisticMissile, Role::LandAttack},
+							   std::pair{SubCategory::AircraftCarrier, Role::AntiSubmarineWarfare},
+							   std::pair{SubCategory::Cruiser, Role::AntiSubmarineWarfare},
+							   std::pair{SubCategory::Destroyer, Role::AntiSubmarineWarfare},
+							   std::pair{SubCategory::Frigate, Role::AntiSubmarineWarfare},
+							   std::pair{SubCategory::Corvette, Role::AntiSubmarineWarfare},
+							   std::pair{SubCategory::PatrolVessel, Role::SurfaceWarfare},
+							   std::pair{SubCategory::AmphibiousVessel, Role::Transport},
+							   std::pair{SubCategory::AuxiliaryVessel, Role::Reconnaissance},
+							   std::pair{SubCategory::MerchantVessel, Role::Transport},
+							   std::pair{SubCategory::AttackSubmarine, Role::AntiSubmarineWarfare},
+							   std::pair{SubCategory::BallisticMissileSubmarine, Role::Strike},
+							   std::pair{SubCategory::CruiseMissileSubmarine, Role::SurfaceWarfare},
+							   std::pair{SubCategory::HeavyweightTorpedo, Role::AntiSubmarineWarfare},
+							   std::pair{SubCategory::LightweightTorpedo, Role::AntiSubmarineWarfare},
+							   std::pair{SubCategory::NavalMine, Role::MineWarfare},
+							   std::pair{SubCategory::Noisemaker, Role::Decoy},
+							   std::pair{SubCategory::SelfPropelledAcousticDecoy, Role::Decoy},
+							   std::pair{SubCategory::Sonobuoy, Role::Surveillance},
+							   std::pair{SubCategory::GroundVehicle, Role::Transport},
+							   std::pair{SubCategory::SurfaceToAirMissileLauncher, Role::AirDefence},
+							   std::pair{SubCategory::AntiAircraftGun, Role::AirDefence},
+							   std::pair{SubCategory::Radar, Role::Surveillance},
+							   std::pair{SubCategory::Airfield, Role::Transport},
+							   std::pair{SubCategory::MilitaryInstallation, Role::Surveillance},
+							   std::pair{SubCategory::CivilianInstallation, Role::Transport},
+							   std::pair{SubCategory::Missile, Role::AirDefence},
+							   std::pair{SubCategory::Torpedo, Role::AntiSubmarineWarfare},
+							   std::pair{SubCategory::SurfaceVessel, Role::SurfaceWarfare},
+							   std::pair{SubCategory::Submarine, Role::AntiSubmarineWarfare}};
+		Units::Api::Instance unit{};
+		unit.Type.Value = "test";
+		for (const auto& [subcategory, role] : cases)
+		{
+			Units::Api::Type type{};
+			type.Id = unit.Type;
+			type.UnitSubCategory = subcategory;
+			type.PlatformRoles = {role};
+			type.PrimaryPlatformRole = role;
+			const auto symbol = DomainConverter::FromUnit(unit, type, StandardIdentity::Friendly);
+			ASSERT_TRUE(symbol) << static_cast<int>(subcategory);
+			const auto& fields = symbol->Identification.Fields();
+			const bool mainIconRole = role == Role::Decoy || (role == Role::AirDefence && fields.SymbolSetValue == SymbolSet::LandEquipment);
+			EXPECT_TRUE(fields.Modifier1 != 0 || fields.Modifier2 != 0 || mainIconRole) << static_cast<int>(subcategory);
+			if (role == Role::AntiSubmarineWarfare && fields.SymbolSetValue != SymbolSet::AirMissile)
+			{
+				EXPECT_EQ(fields.ThirdTen[0], '1');
+				EXPECT_EQ(fields.Modifier1, 51);
+			}
+			Observations::Api::Instance observation{};
+			observation.Type = decltype(observation.Type)::Known<Units::Api::TypeId>(type.Id);
+			const auto observed = DomainConverter::FromObservation(observation, type, StandardIdentity::Hostile);
+			ASSERT_TRUE(observed);
+			EXPECT_EQ(observed->Identification.Fields().Modifier1, fields.Modifier1);
+			EXPECT_EQ(observed->Identification.Fields().Modifier2, fields.Modifier2);
+		}
+		// Animals have no applicable military mission; Other remains an explicit error.
+	}
+
+	TEST(DomainConverterTest, RejectsInapplicablePrimaryRatherThanDroppingIt)
+	{
+		Units::Api::Instance unit{};
+		Units::Api::Type type{};
+		type.Id = unit.Type;
+		type.UnitSubCategory = Classification::Api::SubCategory::Destroyer;
+		type.PrimaryPlatformRole = Classification::Api::Role::AerialRefuelling;
+		type.PlatformRoles = {*type.PrimaryPlatformRole};
+		const auto symbol = DomainConverter::FromUnit(unit, type, StandardIdentity::Friendly);
+		ASSERT_FALSE(symbol);
+		EXPECT_EQ(symbol.error().Code, ConversionErrorCode::UnsupportedClassification);
+	}
+
 	TEST(DomainConverterTest, GuidedMissileCruiserUsesCommonRoleModifier)
 	{
 		Units::Api::Instance unit{};

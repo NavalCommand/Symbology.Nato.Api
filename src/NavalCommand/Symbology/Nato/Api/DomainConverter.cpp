@@ -190,13 +190,16 @@ namespace NavalCommand::Symbology::Nato::Api
 			{
 				return classification;
 			}
-			if (type.UnitSubCategory == SubCategory::FixedWingAircraft || type.UnitSubCategory == SubCategory::RotaryWingAircraft)
+			const auto baseClassification = *classification;
+			if (type.UnitSubCategory == SubCategory::FixedWingAircraft || type.UnitSubCategory == SubCategory::RotaryWingAircraft ||
+				type.UnitSubCategory == SubCategory::TiltRotorAircraft)
 			{
 				using Classification::Api::Role;
 				if (type.PrimaryPlatformRole)
 				{
 					switch (*type.PrimaryPlatformRole)
 					{
+					case Role::AirDefence:
 					case Role::AirSuperiority:
 						classification->Modifier1 = 4;
 						break;
@@ -208,16 +211,18 @@ namespace NavalCommand::Symbology::Nato::Api
 						break;
 					case Role::Strike:
 					case Role::LandAttack:
-						classification->Modifier1 = 1;
+						classification->Modifier1 = 6;
+						classification->CommonModifier1 = '1';
 						break;
 					case Role::AntiSubmarineWarfare:
-						classification->Modifier1 = 2;
+						classification->Modifier1 = 51;
+						classification->CommonModifier1 = '1';
 						break;
 					case Role::Transport:
 						classification->Modifier1 = 3;
 						break;
 					case Role::AerialRefuelling:
-						classification->Modifier1 = 5;
+						classification->Modifier1 = 6;
 						break;
 					case Role::MaritimePatrol:
 						classification->Modifier1 = 17;
@@ -230,17 +235,103 @@ namespace NavalCommand::Symbology::Nato::Api
 					}
 				}
 			}
-			if (type.UnitSubCategory == SubCategory::Missile && type.PrimaryPlatformRole == Classification::Api::Role::AirSuperiority)
+			if (classification->Set == SymbolSet::AirMissile && type.PrimaryPlatformRole)
 			{
-				classification->Modifier1 = 1; // Air launch origin.
-				classification->Modifier2 = 1; // Air destination.
+				using Classification::Api::Role;
+				switch (*type.PrimaryPlatformRole)
+				{
+				case Role::AirSuperiority:
+					classification->Modifier1 = 1; // Known air launch origin for AAM.
+					classification->Modifier2 = 1;
+					break;
+				case Role::AirDefence:
+					classification->Modifier2 = 1;
+					break;
+				case Role::SurfaceWarfare:
+				case Role::LandAttack:
+				case Role::Strike:
+					classification->Modifier2 = 2;
+					break;
+				case Role::AntiSubmarineWarfare:
+					classification->Modifier2 = 3;
+					break;
+				default:
+					break;
+				}
+				if (classification->Modifier2 != 0)
+				{
+					return classification;
+				}
 			}
-			if (classification->Set == SymbolSet::SeaSurface && type.PrimaryPlatformRole == Classification::Api::Role::GuidedMissile)
+
+			// Common sector 1 mission modifiers apply independently of physical type.
+			// Keep an assigned aircraft mission; retain B for strategic missile submarines.
+			if (type.PrimaryPlatformRole && (classification->Modifier1 == 0 || classification->Set == SymbolSet::SeaSubsurface))
 			{
-				// APP-06(E)(1) common sector 1 modifier 133: guided missile.
-				classification->Modifier1 = 33;
-				classification->CommonModifier1 = '1';
+				using Classification::Api::Role;
+				std::uint8_t commonModifier{};
+				switch (*type.PrimaryPlatformRole)
+				{
+				case Role::AntiSubmarineWarfare:
+					commonModifier = 51;
+					break;
+				case Role::SurfaceWarfare:
+					commonModifier = 55;
+					break;
+				case Role::MineWarfare:
+					commonModifier = 54;
+					break;
+				case Role::ElectronicWarfare:
+					commonModifier = 66;
+					break;
+				case Role::Reconnaissance:
+				case Role::Surveillance:
+				case Role::MaritimePatrol:
+					commonModifier = 25;
+					break;
+				case Role::Strike:
+				case Role::LandAttack:
+					if (type.UnitSubCategory != SubCategory::BallisticMissileSubmarine)
+					{
+						commonModifier = 6;
+					}
+					break;
+				case Role::Transport:
+					commonModifier = 10;
+					break;
+				case Role::GuidedMissile:
+					commonModifier = 33;
+					break;
+				case Role::AirDefence:
+					if (classification->Set == SymbolSet::SeaSurface)
+					{
+						classification->Modifier1 = 2;
+					}
+					// Land SAM/AAA main icons already encode air defence.
+					break;
+				default:
+					break;
+				}
+				if (commonModifier != 0)
+				{
+					classification->Modifier1 = commonModifier;
+					classification->CommonModifier1 = '1';
+				}
 			}
+
+			const bool missionChanged = classification->Modifier1 != baseClassification.Modifier1 || classification->Modifier2 != baseClassification.Modifier2 ||
+										classification->CommonModifier1 != baseClassification.CommonModifier1;
+			const bool missionInMainIcon = (type.PrimaryPlatformRole == Classification::Api::Role::Decoy &&
+											(type.UnitSubCategory == SubCategory::Noisemaker || type.UnitSubCategory == SubCategory::SelfPropelledAcousticDecoy)) ||
+										   (type.PrimaryPlatformRole == Classification::Api::Role::AirDefence &&
+											(type.UnitSubCategory == SubCategory::SurfaceToAirMissileLauncher || type.UnitSubCategory == SubCategory::AntiAircraftGun)) ||
+										   (type.PrimaryPlatformRole == Classification::Api::Role::Strike && type.UnitSubCategory == SubCategory::BallisticMissileSubmarine);
+			if (type.PrimaryPlatformRole && !missionChanged && !missionInMainIcon)
+			{
+				return std::unexpected(
+					Error(ConversionErrorCode::UnsupportedClassification, "The primary platform role has no applicable APP-06 modifier for this classification."));
+			}
+
 			return classification;
 		}
 
