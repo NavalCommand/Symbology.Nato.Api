@@ -24,6 +24,7 @@ namespace NavalCommand::Symbology::Nato::Api
 			std::uint8_t Modifier1{};
 			std::optional<std::string> Name;
 			std::uint8_t Modifier2{};
+			char CommonModifier1{'0'};
 		};
 
 		ConversionError Error(ConversionErrorCode code, std::string message)
@@ -234,6 +235,12 @@ namespace NavalCommand::Symbology::Nato::Api
 				classification->Modifier1 = 1; // Air launch origin.
 				classification->Modifier2 = 1; // Air destination.
 			}
+			if (classification->Set == SymbolSet::SeaSurface && type.PrimaryPlatformRole == Classification::Api::Role::GuidedMissile)
+			{
+				// APP-06(E)(1) common sector 1 modifier 133: guided missile.
+				classification->Modifier1 = 33;
+				classification->CommonModifier1 = '1';
+			}
 			return classification;
 		}
 
@@ -322,6 +329,7 @@ namespace NavalCommand::Symbology::Nato::Api
 			fields.EntitySubtype = classification.EntitySubtype;
 			fields.Modifier1 = classification.Modifier1;
 			fields.Modifier2 = classification.Modifier2;
+			fields.ThirdTen[0] = classification.CommonModifier1;
 			auto sidc = Sidc::Create(std::move(fields));
 			if (!sidc)
 			{

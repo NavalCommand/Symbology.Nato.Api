@@ -4,6 +4,25 @@
 
 namespace NavalCommand::Symbology::Nato::Api
 {
+	TEST(DomainConverterTest, GuidedMissileCruiserUsesCommonRoleModifier)
+	{
+		Units::Api::Instance unit{};
+		unit.Type.Value = "cruiser";
+		Units::Api::Type type{};
+		type.Id = unit.Type;
+		type.UnitSubCategory = Classification::Api::SubCategory::Cruiser;
+		type.PlatformRoles = {Classification::Api::Role::GuidedMissile};
+		const auto ordinary = DomainConverter::FromUnit(unit, type, StandardIdentity::Friendly);
+		ASSERT_TRUE(ordinary);
+		EXPECT_EQ(ordinary->Identification.Fields().Modifier1, 0);
+		type.PrimaryPlatformRole = Classification::Api::Role::GuidedMissile;
+		const auto guided = DomainConverter::FromUnit(unit, type, StandardIdentity::Friendly);
+		ASSERT_TRUE(guided);
+		EXPECT_EQ(guided->Identification.Fields().EntitySubtype, 2);
+		EXPECT_EQ(guided->Identification.Fields().Modifier1, 33);
+		EXPECT_EQ(guided->Identification.Fields().ThirdTen[0], '1');
+	}
+
 	TEST(DomainConverterTest, PrimaryRoleAloneSelectsAircraftMissionModifier)
 	{
 		Units::Api::Instance unit{};
